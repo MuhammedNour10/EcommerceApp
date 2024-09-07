@@ -1,0 +1,212 @@
+@page "/cart"
+@rendermode InteractiveServer
+@using System.Globalization
+@using System.Runtime.CompilerServices
+@using EcommerceApp.Repository.IRepository
+@using EcommerceApp.Service
+@using EcommerceApp.Utility
+@using Microsoft.AspNetCore.Authorization
+@inject  IShoppingCartRepo ShoppingCartRepo
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IOrderRepo OrderRepo;
+@inject NavigationManager NavigationManager;
+@inject PaymentService _PaymentService
+
+@attribute [Authorize]
+<PageTitle>Cart</PageTitle>
+
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="@Assets["images/loading.gif"]" alt="Loading..." />
+</div>
+}
+else
+{
+
+       @if (ShoppingCarts.Any())
+       {
+           
+        <div class="row w-100">
+            <div class="col-lg-6 col-12">
+                <div class="container p-4 m-2">
+                    <h4 class="text-center text-success display-6">
+                        Cart Summary
+                    </h4>
+
+                  @foreach (var cart in ShoppingCarts)
+                  {
+
+                    <div class="d-flex p-2 m-2">
+                      
+                        <div class="card flex-row w-100">
+                            <img class="card-img-left" src="@cart.Product.ImageUrl" style="width: 120px;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h4 class="">
+                                        @cart.Product.Name
+                                    </h4>
+                                    <h4>
+                                        @cart.Product.Price.ToString("C",CultureInfo.GetCultureInfo("tr-TR"))
+                                    </h4>
+                                </div>
+                                <div class="flex-fill">
+                                    <h4 class="text-danger">
+                                        @((cart.Product.Price*cart.Count).ToString("C",CultureInfo.GetCultureInfo("tr-TR")))
+                                    </h4>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex justify-content-between g-0">
+                                        <span @onclick="() => UpdateCart(cart.ProductId,-1)">
+                                            <i class="bi bi-dash-circle-fill btn text-secondary"></i>
+                                        </span>
+                                        <span class="ml-1 me-1">
+                                            <b class="lead">@cart.Count</b>
+                                        </span>
+                                        <span  @onclick="() => UpdateCart(cart.ProductId,1)">
+                                            <i class="bi bi-plus-circle-fill btn text-secondary"></i>
+                                        </span>
+                                    </div>
+                                    <button class="btn btn-danger"  @onclick="() => UpdateCart(cart.ProductId,-1000)">Remove</button>
+                                </div>
+                            
+                            </div>
+                        </div>
+                    </div>
+                  }
+
+                </div>
+            </div>
+            <div class="col-lg-6 col-12 p-4">
+                <div class="card">
+                    <div class="card-header text-success text-center display-6">
+                        Pickup Details
+                    </div>
+                    <EditForm Model="OrderHeader" FormName="Order" OnValidSubmit="ProccessOrderCreation">
+                        <DataAnnotationsValidator/>
+                       
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>Name</label>
+                                <InputText @bind-Value="OrderHeader.Name" type="text" class="form-control"/>
+                                <ValidationMessage For="() => OrderHeader.Name"/>
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <InputText @bind-Value="OrderHeader.Email" class="form-control"/>
+                                <ValidationMessage For="() => OrderHeader.Email"/>
+                            </div>
+                            <div class="form-group">
+                                <label>Phone</label>
+                                <InputText @bind-Value="OrderHeader.PhoneNumber" class="form-control"/>
+                                <ValidationMessage For="() => OrderHeader.PhoneNumber"/>
+                            </div>
+
+                            <div class="card mt-4 bg-light">
+                                <div class="card-body">
+                                    <h4>
+                                        Grand Total: @OrderHeader.OrderTotal.ToString("C",CultureInfo.GetCultureInfo("tr-TR"))
+                                    </h4>
+                                    <h4>
+                                        No. of Items: @TotalItem
+                                    </h4>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-success m-4">
+                            Looks Good? Place Order!
+                        </button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+       }
+       else
+       {
+           <div class="p-4">
+               <div class="alert alert-warning">
+                   Your Cart Is Empty!Please Add Items To Cart
+               </div>
+           </div>
+       }
+
+    }
+
+@code
+{
+    private bool IsLoading { get; set; } = true;
+    private int TotalItem { get; set; } = 0;
+    private List<ShoppingCart> ShoppingCarts { get; set; } = new List<ShoppingCart>();
+    [SupplyParameterFromForm] private OrderHeader OrderHeader { get; set; } = new OrderHeader();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        OrderHeader.Email = user.FindFirst(x => x.Type.Contains("email"))?.Value;
+        OrderHeader.UserId = user.FindFirst(x => x.Type.Contains("nameidentifier"))?.Value;
+        OrderHeader.Status = Sd.StatusPending;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LaodCart();
+            IsLoading = false;
+            StateHasChanged();
+        }
+
+    }
+
+
+
+
+    private async Task LaodCart()
+    {
+
+        ShoppingCarts = await ShoppingCartRepo.GetCartItemsAsync(OrderHeader.UserId);
+
+        OrderHeader.OrderTotal = 0;
+        TotalItem = 0;
+
+        foreach (var cart in ShoppingCarts)
+        {
+
+            TotalItem += cart.Count;
+            OrderHeader.OrderTotal += (Convert.ToDouble(cart.Product.Price) * cart.Count);
+        }
+    }
+
+    private async Task UpdateCart(int productId, int updateBy)
+    {
+        var result = await ShoppingCartRepo.UpdateCartAsync(OrderHeader.UserId, productId, updateBy);
+
+
+        await LaodCart();
+    }
+
+    //create Order
+
+    private async Task ProccessOrderCreation()
+    {
+        IsLoading = true;
+        await Task.Yield();
+
+        // Convert shopping cart items to order details
+        OrderHeader.Items = Sd.ConvertShoppingCartListToOrderDetails(ShoppingCarts).ToList();
+        
+        var session = _PaymentService.CreateCheckoutSession(OrderHeader);
+            OrderHeader.SessionId =session.Id;
+            
+            // Create the order asynchronously
+            await OrderRepo.CreateOrderAsync(OrderHeader);
+
+        // Ensure that the order is created and the ID is generated before navigating
+        NavigationManager.NavigateTo(session.Url);
+    }
+
+}

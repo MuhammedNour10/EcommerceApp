@@ -1,0 +1,83 @@
+﻿@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Identity
+@using EcommerceApp.Data
+
+@inject SignInManager<ApplicationUser> SignInManager
+@inject IdentityRedirectManager RedirectManager
+
+<div class="external-login">
+    @if (externalLogins.Length == 0)
+    {
+        <div class="alert alert-warning">
+            <p>
+                There are no external authentication services configured. See this <a href="https://go.microsoft.com/fwlink/?LinkID=532715">article
+                    about setting up this ASP.NET application to support logging in via external services</a>.
+            </p>
+        </div>
+    }
+    else
+    {
+        <form class="external-login-form" action="Account/PerformExternalLogin" method="post">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+
+            <div class="d-grid gap-2">
+                @foreach (var provider in externalLogins)
+                {
+                    <button type="submit" class="btn btn-outline-dark" name="provider" value="@provider.Name" title="Log in using your @provider.DisplayName account">
+                        <img src="images/google.png" alt="@provider.DisplayName logo" class="external-login-logo" />
+                        Log in with @provider.DisplayName
+                    </button>
+                }
+            </div>
+        </form>
+    }
+</div>
+
+@code {
+    private AuthenticationScheme[] externalLogins = [];
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        externalLogins = (await SignInManager.GetExternalAuthenticationSchemesAsync()).ToArray();
+    }
+}
+
+<style>
+
+    .external-login {
+        max-width: 600px;
+        margin: auto;
+    }
+
+    .external-login-form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .login-options {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .btn-external-login {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px;
+        font-size: 16px;
+        width: 100%;
+    }
+
+    .external-login-logo {
+        height: 20px;
+        margin-right: 10px;
+    }
+
+</style>

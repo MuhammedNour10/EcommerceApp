@@ -1,0 +1,84 @@
+@page "/category/create"
+@page "/category/edit/{id:int}"
+@using EcommerceApp.Service.Extension
+@inject ICategoryRepo CategoryRepo
+@inject NavigationManager Navigation
+@inject  IJSRuntime JsRuntime
+@rendermode InteractiveServer
+
+<h3>@(Id > 0 ? "Edit Category" : "Create Category")</h3>
+
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="@Assets["images/loading.gif"]" alt="Loading..." />
+</div>
+}
+else
+{
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <EditForm Model="Category" FormName="category" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="CategoryName">Category Name</label>
+                    <InputText id="CategoryName" class="form-control" @bind-Value="Category.Name" />
+                    <ValidationMessage For="@(() => Category.Name)" />
+                </div>
+
+                <div class="form-group text-center mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        @(Id > 0 ? "Update" : "Create")
+                    </button>
+                    <button type="button" class="btn btn-secondary ml-2" @onclick="Cancel">
+                        Cancel
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+}
+
+@code {
+[Parameter]
+public int Id { get; set; }
+
+public bool IsLoading { get; set; } = true;
+private Category Category { get; set; } = new Category();
+
+protected override async Task OnInitializedAsync()
+{
+IsLoading = true;
+if (Id > 0)
+{
+Category = await CategoryRepo.GetCategoryByIdAsync(Id);
+}
+IsLoading = false;
+}
+
+private async Task HandleSubmit()
+{
+    if (Id > 0)
+    {
+        await CategoryRepo.UpdateCategoryAsync(Category);
+        await JsRuntime.ToastrSuccess( "Category Updated Successfully");
+    }
+    else
+    {
+        await CategoryRepo.AddCategory(Category);
+        await JsRuntime.ToastrSuccess("Category Added Successfully");
+    }
+
+    Navigation.NavigateTo("/category");
+}
+
+
+private void Cancel()
+{
+Navigation.NavigateTo("/category");
+}
+}

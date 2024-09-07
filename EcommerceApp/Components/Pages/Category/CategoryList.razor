@@ -1,0 +1,107 @@
+@page "/category"
+@using EcommerceApp.Service.Extension
+@rendermode InteractiveServer
+@inject ICategoryRepo CategoryRepo
+@inject  IJSRuntime Js
+<ConfirmDeleteModal OnModCallback="confirmDeleteClick" Title="category"/>
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="@Assets["images/loading.gif"]" alt="Loading..." />
+</div>
+
+}
+else
+{
+<div class="card">
+    <div class="card-header text-center">
+        <h3>Category List</h3>
+    </div>
+
+    @if (Categories?.Any() == true)
+    {
+    <div class="card-body">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th>Category ID</th>
+                <th>Category Name</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var category in Categories)
+            {
+                <tr>
+                    <td>@category.Id</td>
+                    <td>@category.Name</td>
+                    <td>
+                        <NavLink href="@($"category/edit/{category.Id}")" class="btn  btn-outline-secondary">
+                            <i class="bi bi-pencil-square"></i>
+                            Edit
+                        </NavLink>
+                        <delete  class="btn btn-outline-danger" @onclick="()=>handleDelete(category.Id)" >Delete
+                            <i class="bi bi-trash3-fill"></i>
+                            </delete>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <div class="text-end mt-3">
+            <NavLink href="category/create" class="btn btn-outline-primary">
+                <i class="bi bi-plus-square-dotted"></i>
+                Add Category
+            </NavLink>
+        </div>
+    </div>
+    }
+    else
+    {
+    <div class="card-body">
+        <h3>No categories found! Please add a category.</h3>
+    </div>
+    }
+</div>
+}
+
+@code {
+private bool IsLoading { get; set; } = true;
+private List<Category> Categories { get; set; } = new List<Category>();
+private int DeleteCategoryId { get; set; } = 0;
+
+protected override async Task OnInitializedAsync()
+{
+IsLoading = true;
+await LoadCategoriesAsync();
+IsLoading = false;
+}
+
+private async Task LoadCategoriesAsync()
+{
+Categories = await CategoryRepo.GetCategoriesAsync() ?? new List<Category>();
+}
+
+private async Task handleDelete(int id)
+{
+    DeleteCategoryId = id; 
+    await Js.InvokeVoidAsync("ShowConfirmationModal");
+
+}
+
+private async Task confirmDeleteClick(bool isConfirmed)
+{
+    IsLoading = true;
+    await Js.InvokeVoidAsync("HideConfirmationModal");
+    if (isConfirmed && DeleteCategoryId != 0)
+    {
+    await CategoryRepo.DeleteCategoryAsync(DeleteCategoryId);
+    await Js.ToastrSuccess( "Category Deleted Successfully");
+    await LoadCategoriesAsync();
+    }
+
+    DeleteCategoryId = 0;
+    IsLoading = false;
+
+}
+}

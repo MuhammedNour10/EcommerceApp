@@ -1,0 +1,122 @@
+@page "/product"
+@rendermode InteractiveServer
+@using EcommerceApp.Repository.IRepository
+
+@inject IProductRepo _ProductRepo
+@inject IJSRuntime _Js
+
+<ConfirmDeleteModal OnModCallback="confirmDeleteClick" Title="Product" />
+
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="images/loading.gif" alt="Loading..." />
+</div>
+}
+else
+{
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white text-center">
+        <h3>Product List</h3>
+    </div>
+
+    @if (Products?.Any() == true)
+    {
+    <div class="card-body p-4">
+        <table class="table table-hover align-middle text-center">
+            <thead class="table-dark">
+            <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Name</th>
+                <th scope="col">Price</th>
+                <th scope="col">Description</th>
+                <th scope="col">Special Tag</th>
+                <th scope="col">Category</th>
+                <th scope="col">Image</th>
+                <th scope="col">Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var product in Products)
+            {
+            <tr>
+                <td>@product.Id</td>
+                <td>@product.Name</td>
+                <td>@product.Price:C</td>
+                <td>@product.Description</td>
+                <td>@product.SpecialTag</td>
+                <td>@product.Category.Name</td>
+                <td>
+                    <img src="@product.ImageUrl" alt="Product Image" class="rounded-circle" width="50" height="50" />
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <NavLink href="@($"product/edit/{product.Id}")" class="btn btn-outline-warning">
+                            <i class="bi bi-pencil-square"></i> Edit
+                        </NavLink>
+                        <button class="btn btn-outline-danger" @onclick="() => DeleteProduct(product.Id)">
+                            <i class="bi bi-trash3-fill"></i> Delete
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    }
+    else
+    {
+    <div class="card-body text-center">
+        <h3 class="text-muted">No products found! Please add a product.</h3>
+    </div>
+    }
+    <div class="card-footer text-end">
+        <NavLink href="product/create" class="btn btn-primary">
+            <i class="bi bi-plus-square-dotted"></i> Add Product
+        </NavLink>
+    </div>
+</div>
+}
+
+@code {
+private bool IsLoading { get; set; } = true;
+private List<Product> Products { get; set; } = new List<Product>();
+private int DeleteProductId { get; set; }
+
+protected override async Task OnAfterRenderAsync(bool firstRender)
+{
+if (firstRender)
+{
+await LoadProductsAsync();
+IsLoading = false;
+StateHasChanged(); // Request re-render to update the UI
+}
+}
+
+private async Task LoadProductsAsync()
+{
+Products = await _ProductRepo.GetProductAsync();
+}
+
+private async Task DeleteProduct(int productId)
+{
+DeleteProductId = productId;
+await _Js.InvokeVoidAsync("ShowConfirmationModal");
+}
+
+private async Task confirmDeleteClick(bool isConfirmed)
+{
+IsLoading = true;
+await _Js.InvokeVoidAsync("HideConfirmationModal");
+if (isConfirmed && DeleteProductId != 0)
+{
+await _ProductRepo.DeleteProductAsync(DeleteProductId);
+await _Js.ToastrSuccess("Product Deleted successfully");
+await LoadProductsAsync();
+}
+
+DeleteProductId = 0;
+IsLoading = false;
+}
+}

@@ -1,0 +1,47 @@
+@page "/order/confirmation/{session_id}"
+@using EcommerceApp.Repository.IRepository
+@using EcommerceApp.Service
+@using EcommerceApp.Utility
+@inject PaymentService _PaymentService
+@inject IShoppingCartRepo _ShoppingCartRepo
+<h3>OrderConfirmation</h3>
+
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="@Assets["images/loading.gif"]" alt="Loading..." />
+</div>
+}
+else
+{
+    
+    <div class="text-center">
+        <h1 class="p-4 text-success">You are one stop closer to delicious food</h1>
+        <p>You order is confirmed! Please note your order ID for any questions.</p>
+        <p>Order ID:@OrderHeader.Id</p>
+        <hr/>
+        <img src="images/lawn_leaf.jpg" width="40%"/>
+        <hr/>
+        
+    </div>
+    
+}
+
+@code {
+    [Parameter]
+    public string session_id { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private OrderHeader OrderHeader { get; set; } = new OrderHeader();
+    protected override async Task OnInitializedAsync()
+    {
+        OrderHeader=await _PaymentService.ChechPaymentStatusAsync(session_id);
+        if (OrderHeader.Status == Sd.StatusApproved)
+        {
+            await _ShoppingCartRepo.CartItemsCountAsync(OrderHeader.UserId);
+        }
+        IsLoading = false;
+   
+
+    }
+
+}

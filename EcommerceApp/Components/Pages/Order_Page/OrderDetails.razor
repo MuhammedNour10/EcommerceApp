@@ -1,0 +1,119 @@
+@page "/order/detail/{id:int}"
+
+@rendermode InteractiveServer
+@using System.Globalization
+@using EcommerceApp.Repository.IRepository
+@using EcommerceApp.Utility
+@inject IOrderRepo OrderRepo
+@inject IJSRuntime JsRuntime
+@inject AuthenticationStateProvider _AuthenticationStateProvider
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="@Assets["images/loading.gif"]" alt="Loading..." />
+</div>
+
+}
+
+else
+{
+        <div class="container my-5 mx-auto p-5 w-100" style="max-width: 950px;">
+        <div class="card" style="max-width: 750px;">
+                    <div class="pt-3 text-success text-center">
+                        <span class="h4"> ORDER DETAILS</span>
+                    </div>
+                
+            <hr />
+            <div class="px-3">
+                <p>Order Id:@Order.Id</p>
+                <p>Name:@Order.Name </p>
+                <p>Email:@Order.Email </p>
+                <p>Phone:@Order.PhoneNumber </p>
+                <p>Order Status:@Order.Status  </p>
+            </div>
+            <hr />
+            <div class="card-body">
+                <h4 class="text-success">Menu Items</h4>
+                    
+                       @foreach (var detail in @Order.Items)
+                        {
+                          <div class="d-flex">
+                           <div class="d-flex w-100 justify-content-between">
+                             <p>
+                                &nbsp; @detail.ProductName
+                             </p>
+                             <p>
+                                Price x Count = @detail.Price.ToString("c",CultureInfo.GetCultureInfo("tr-TR")) x @detail.Count=
+                             </p>
+                         </div>
+                           <div class="ps-4">
+                               @((detail.Price*detail.Count).ToString("C",CultureInfo.GetCultureInfo("tr-TR")))
+                        </div>
+
+                    </div>
+                     }
+                
+
+                <hr />
+                <h4 class="text-success text-end">
+                    @Order.OrderTotal.ToString("c",CultureInfo.GetCultureInfo("tr-TR"))
+                </h4>
+                <hr />
+
+                <div class="row">
+                    <div class="col-5">
+                        <a href="order/list" class="btn btn-secondary  m-2 p-2" style="width:150px;">Back to Orders</a>
+                    </div>
+                    <div class="col-7 text-end">
+                        @if (Order.Status != Sd.statusCancelled && Order.Status != Sd.statusCompleted && IsAdmin)
+                        {
+                        <button class="btn btn-danger m-2 p-2" style="width:150px;" @onclick="() => UpdateStatus(Sd.statusCancelled)">Cancel Order</button>
+                         @if (Order.Status == Sd.StatusApproved)
+                         {
+                        <button class="btn btn-primary m-2 p-2" style="width:150px;" @onclick="() => UpdateStatus(Sd.StatusReadyForPickUp)">Ready for Pickup</button>
+                         }
+                     
+                         @if (Order.Status == Sd.StatusReadyForPickUp)
+                         {
+                        <button class="btn btn-success m-2 p-2" style="width:150px;" @onclick="() => UpdateStatus(Sd.statusCompleted)">Completed</button>
+                         }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+    private bool IsLoading { get; set; }
+    private OrderHeader Order { get; set; } = new OrderHeader();
+    private bool IsAdmin { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        IsLoading = true;
+        await LoadOrder();
+        IsLoading = false;
+    }
+
+    private async Task LoadOrder()
+    {
+
+        Order = await OrderRepo.GetOrderByIdAsync(Id);
+        var authState = await _AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        IsAdmin = user.IsInRole(Sd.RoleAdmin);
+    }
+
+    private async Task UpdateStatus(string newStatus)
+    {
+        await OrderRepo.UpdateStatusAsync(Id, newStatus,"");
+        await JsRuntime.ToastrSuccess("status updated successfully" + newStatus);
+    }
+
+}

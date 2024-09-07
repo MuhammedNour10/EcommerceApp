@@ -1,0 +1,188 @@
+@page "/product/create"
+@page "/product/edit/{Id:int}"
+@rendermode InteractiveServer
+@using EcommerceApp.Model.Domain
+@using EcommerceApp.Repository.IRepository
+
+@inject ICategoryRepo _CategoryRepo
+@inject IProductRepo _ProductRepo
+@inject IJSRuntime _Js
+@inject NavigationManager _Navigation
+@inject IWebHostEnvironment _WebHostEnvironment
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <div class="card shadow-lg border-0 rounded-lg">
+                <div class="card-header bg-primary text-white text-center">
+                    <h3 class="font-weight-light">
+                        @if (Id > 0)
+                        {
+                            <span>Edit Product</span>
+                        }
+                        else
+                        {
+                            <span>Create Product</span>
+                        }
+                    </h3>
+                </div>
+                <div class="card-body">
+                    @if (IsLoading)
+                    {
+                        <div class="text-center">
+                            <img src="images/loading.gif" alt="Loading..." />
+                        </div>
+                    }
+                    else
+                    {
+                        <EditForm Model="Product" OnValidSubmit="HandleValidSubmit">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary />
+
+                            <div class="form-group m-3">
+                                <label for="ProductName">Product Name</label>
+                                <InputText id="ProductName" class="form-control" @bind-Value="Product.Name" placeholder="Enter product name" />
+                                <ValidationMessage For="@(() => Product.Name)" />
+                            </div>
+
+                            <div class="form-group m-3">
+                                <label for="ProductDescription">Product Description</label>
+                                <RadzenHtmlEditor @bind-Value=@Product.Description style="height: 450px;"/>
+                                <ValidationMessage For="@(() => Product.Description)"/>
+                            </div>
+
+                            <div class="form-group m-3">
+                                <label for="SpecialTag">SpecialTag</label>
+                                <InputText id="ProductDescription" class="form-control" @bind-Value="Product.SpecialTag" placeholder="Enter SpecialTag" rows="4"/>
+                                <ValidationMessage For="@(() => Product.SpecialTag)" />
+                            </div>
+
+                            <div class="form-group m-3">
+                                <label for="ProductPrice">Price</label>
+                                <InputNumber id="ProductPrice" class="form-control" @bind-Value="Product.Price" placeholder="Enter product price" />
+                                <ValidationMessage For="@(() => Product.Price)" />
+                            </div>
+
+                            <div class="form-group m-3">
+                                <label for="Category">Category</label>
+                                <InputSelect id="Category" class="form-select" @bind-Value="Product.CategoryId">
+                                    <option value="0" disabled>Select Category</option>
+                                    @foreach (var category in Categories)
+                                    {
+                                        <option value="@category.Id">@category.Name</option>
+                                    }
+                                </InputSelect>
+                                <ValidationMessage For="@(() => Product.CategoryId)" />
+                            </div>
+
+                            <div class="form-group m-3">
+                                <label for="image">Upload Image</label>
+                                <InputFile accept="image/x-png,image/jpeg" id="image" OnChange="ImageHandle" class="form-control"/>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(Product.ImageUrl))
+                            {
+                                <div class="form-group m-3">
+                                    <label>Selected Image</label>
+                                    <div>
+                                        <img src="@Product.ImageUrl" alt="Selected Image" class="img-thumbnail" width="200" />
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="text-center mt-4">
+                                <button type="submit" class="btn btn-success">
+                                    @if (Id > 0)
+                                    {
+                                        <i class="bi bi-pencil-square"></i>
+                                        <span>Update</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-plus-square-dotted"></i>
+                                        <span>Create</span>
+                                    }
+                                </button>
+                                <button type="button" class="btn btn-secondary ml-2" @onclick="Cancel">
+                                    <i class="bi bi-x-circle-fill"></i>
+                                    Cancel
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool IsLoading { get; set; } = true;
+    [Parameter]
+    public int Id { get; set; }
+
+    private Product Product { get; set; } = new Product();
+    private List<Category> Categories { get; set; } = new List<Category>();
+    private string DirectoryPath { get; set; } = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        DirectoryPath = Path.Combine(_WebHostEnvironment.WebRootPath, "images", "product");
+        await LoadProducts();
+        IsLoading = false;
+    }
+
+    private async Task LoadProducts()
+    {
+        if (Id > 0)
+        {
+            Product = await _ProductRepo.GetProductByIdAsync(Id);
+        }
+
+        Categories = await _CategoryRepo.GetCategoriesAsync();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        IsLoading = true;
+
+        if (Id > 0)
+        {
+            await _ProductRepo.UpdateProductAsync(Product);
+            await _Js.ToastrSuccess("Product Updated Successfully");
+        }
+        else
+        {
+            await _ProductRepo.AddProduct(Product);
+            await _Js.ToastrSuccess("Product Added Successfully");
+        }
+
+        IsLoading = false;
+        _Navigation.NavigateTo("product");
+    }
+
+    private void Cancel()
+    {
+        _Navigation.NavigateTo("product");
+    }
+
+    private async Task ImageHandle(InputFileChangeEventArgs obj)
+    {
+        IsLoading = true;
+
+        var file = obj.File;
+        var newFileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+
+        if (!Directory.Exists(DirectoryPath))
+        {
+            Directory.CreateDirectory(DirectoryPath);
+        }
+
+        var path = Path.Combine(DirectoryPath, newFileName);
+
+        await using FileStream fileStream = new(path, FileMode.Create);
+        await file.OpenReadStream(file.Size).CopyToAsync(fileStream);
+        Product.ImageUrl = $"/images/product/{newFileName}";
+        IsLoading = false;
+    }
+}

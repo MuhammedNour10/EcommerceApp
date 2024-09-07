@@ -1,0 +1,10 @@
+# Ignore the appsettings.json file
+appsettings.json
+
+# Ignore Visual Studio files
+.vscode/
+.vs/
+
+# Ignore build output directories
+bin/
+obj/

@@ -1,0 +1,225 @@
+﻿
+@page "/"
+@using System.Globalization
+@using System.Security.Claims
+@using EcommerceApp.Repository.IRepository
+@using EcommerceApp.Service
+
+@inject IProductRepo ProductRepo;
+@inject ICategoryRepo CategoryRepo;
+@inject AuthenticationStateProvider AuthenticationStateProvider;
+@inject NavigationManager NavigationManager;
+@inject IShoppingCartRepo ShoppingCartRepo;
+@inject IJSRuntime Js;
+@rendermode InteractiveServer
+<PageTitle>Home page</PageTitle>
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="@Assets["images/loading.gif"]" alt="Loading..." />
+</div>
+
+}
+else
+{
+    
+
+<div class="container-fluid px-0 m-0 full-width">
+    <div class="jumbotron-custom">
+        <div class="m-auto d-flex align-items-center" style="width: 400px; height: 50vh;">
+
+            <div class="d-flex align-items-center" style="width: 100%;">
+                <input type="text" class="form-control rounded-pill"
+                       placeholder="Search for Food Items!"
+                       @bind="SearchText"
+                       @oninput="HandleSearchTextChanged"
+                       style="width: 100%; padding: 20px;">
+                <span style="position: relative; left: -43px;"><i class="bi bi-search"></i></span>
+            </div>
+        </div>
+    </div>
+
+    <RadzenButton Text="Hi"></RadzenButton>
+       
+    <div class="content px-4 m-2">
+        <ul class="nav nav-underline justify-content-center mb-2">
+            <li class="nav-item">
+                <span class="nav-link @GetActiveTabClass(0)" href="#" @onclick="() => FilterProduct(0)" style="cursor: pointer">All</span>
+            </li>
+            @foreach (var category in Categories)
+            {
+                
+            <li class="nav-item">
+                <span class="nav-link @GetActiveTabClass(category.Id)" href="#" @onclick="() => FilterProduct(category.Id)" style="cursor: pointer">@category.Name</span>
+            </li>
+            }
+        
+        </ul>
+        <div class="row mt-4 mx-1">
+            @foreach (var product in FilteredProducts)
+            {
+                
+            <div class="col-12 col-md-6 col-lg-4 pe-3 mb-5">
+                <div class="card">
+                    <div class="mt-3 mb-2 row">
+                        <div class="col-6 px-3">
+                            <i class="bi bi-star btn btn-outline-success disabled"> @product.SpecialTag</i>
+                        </div>
+                        <div class="col-6 text-end px-3 text-danger">
+                            @product.Price.ToString("C",CultureInfo.GetCultureInfo("tr-TR"))
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <img class="card-img-top img-thumbnail img-rounded w-50 mt-2" src="@product.ImageUrl" style="">
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title text-center lead text-success">@product.Name</h5>
+                        <p class="card-text mt-2">@((MarkupString)@product.Description)</p>
+                        <h4 class="text-center">
+                            <div class="mt-lg-auto p-2" @onclick="() => AddItemToCart(product)">
+                                <i class="bi bi-cart3 btn btn-success text-right px-5" style="width:300px"> Add to cart</i>
+                            </div>
+
+                        </h4>
+
+                    </div>
+                </div>
+            </div>
+            }
+        </div>
+    </div>
+</div>
+
+}
+
+
+
+
+
+@code
+{
+    private bool IsLoading { get; set; } = true;
+    private string SearchText { get; set; } = "";
+    private int SelectedCategoryId { get; set; } = 0;
+    
+
+    private List<Model.Domain.Product> Products { get; set; } = new List<Model.Domain.Product>();
+    private List<Model.Domain.Product> FilteredProducts { get; set; } = new List<Model.Domain.Product>();
+    private List<Model.Domain.Category> Categories { get; set; } = new List<Model.Domain.Category>();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadCategoriesProducts();
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+
+
+    private async Task LoadCategoriesProducts()
+    {
+        Products = await ProductRepo.GetProductAsync();
+        Categories = await CategoryRepo.GetCategoriesAsync();
+        FilteredProducts = Products;
+
+    }
+
+    private void FilterProduct(int categoryId)
+    {
+        if (categoryId == 0)
+        {
+            FilteredProducts = Products;
+            SelectedCategoryId = categoryId;
+            SearchText = string.Empty;
+
+        }
+        else
+        {
+            FilteredProducts = Products.Where(x => x.CategoryId == categoryId).ToList();
+            SelectedCategoryId = categoryId;
+            SearchText = string.Empty;
+
+        }
+    }
+
+    private void FilterProductByName(string newFilterProduct)
+    {
+        if (string.IsNullOrWhiteSpace(newFilterProduct))
+        {
+            FilteredProducts = Products;
+        }
+        else
+        {
+            FilteredProducts = Products.
+                Where(u => u.Name.Contains(newFilterProduct, StringComparison.InvariantCultureIgnoreCase)).ToList();
+            SearchText = newFilterProduct;
+        }
+        
+    }
+
+    private void HandleSearchTextChanged(ChangeEventArgs e)
+    {
+        FilterProductByName(e.Value.ToString());
+    }
+
+    private string GetActiveTabClass(int categoryId)
+    {
+
+        return categoryId == SelectedCategoryId ? "active" : string.Empty;
+    }
+    
+    
+    
+
+    private async Task AddItemToCart(Model.Domain.Product product)
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var isAuthenticated = user.Identity is not null && user.Identity.IsAuthenticated;
+      
+        if (!isAuthenticated)
+        {
+            NavigationManager.NavigateTo("Account/Login");
+        }
+        else
+        {
+    
+           // Update the cart asynchronously
+           var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var result = await ShoppingCartRepo.UpdateCartAsync(userId, product.Id, 1);
+    
+            if (result)
+            {
+                await Js.ToastrSuccess("Item add to cart successfully");
+            }
+            else
+            {
+                await Js.ToastrError("Error encounted");
+            }
+        }
+        
+    }
+
+   
+}
+
+
+
+
+
+
+
+@* https://github.com/bhrugen/YumBlazor/tree/master/YumBlazor *@
+
+
+
+
+
+
+
+
+
+

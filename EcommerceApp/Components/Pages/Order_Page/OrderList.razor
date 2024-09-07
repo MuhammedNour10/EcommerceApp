@@ -1,0 +1,122 @@
+@page "/order/list"
+@using System.Globalization
+@using System.Security.Claims
+@using EcommerceApp.Repository.IRepository
+@using EcommerceApp.Service.Extension
+@using EcommerceApp.Utility
+@using Microsoft.AspNetCore.Authorization
+@rendermode InteractiveServer
+@inject ICategoryRepo CategoryRepo
+@inject  IOrderRepo _OrderRepo
+@inject NavigationManager NavigationManager
+@inject  IJSRuntime Js
+
+@attribute [Authorize]
+
+@if (IsLoading)
+{
+<div class="text-center">
+    <img src="@Assets["images/loading.gif"]" alt="Loading..." />
+</div>
+
+}
+else
+{
+<div class="card mt-3">
+    <div class="card-header text-center">
+        <h3>Order List</h3>
+    </div>
+
+    @if (OrderHeaders?.Any() == true)
+    {
+
+<RadzenDataGrid AllowFiltering="true"  AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="3" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+    Data="@OrderHeaders"  ColumnWidth="300px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single">
+    <Columns>
+        <RadzenDataGridColumn Property="Id" Filterable="false" Title="ID" Frozen="true" Width="80px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="Name" Title="Name" Width="160px" TextAlign="TextAlign.Center"/>
+        <RadzenDataGridColumn Property="PhoneNumber" Title="PhoneNumber" Width="200px" TextAlign="TextAlign.Start" />
+        <RadzenDataGridColumn Property="Email" Title="Title" Width="180px" />
+        <RadzenDataGridColumn Property="OrderTotal" Title="OrderTotal" FormatString="{0:C}" Width="160px" />
+        <RadzenDataGridColumn Property="OrderDate"  Title="OrderDate" FormatString="{0:d}" Width="160px" />
+        <RadzenDataGridColumn Property="Status"  TextAlign="TextAlign.Start" Title="Status" Width="200px" />
+
+        <RadzenDataGridColumn Title="Action">
+            <Template Context="OrderHeaders">
+              <RadzenButton ButtonStyle="ButtonStyle.Primary" Text="Details" Shade="Shade.Lighter" Click="@(() => NavigationManager.NavigateTo($"order/detail/{OrderHeaders.Id}"))"></RadzenButton>
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+    }
+  
+</div>
+}
+
+@code {
+    private bool IsLoading { get; set; } = true;
+    private IEnumerable<OrderHeader> OrderHeaders { get; set; } = new List<OrderHeader>();
+    private int DeleteCategoryId { get; set; } = 0;
+    private bool IsAdmin { get; set; } 
+    private string userId { get; set; }
+
+    [CascadingParameter]
+    public Task<AuthenticationState> AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        IsLoading = true;
+        await LoadOrderHeader();
+        IsLoading = false;
+    }
+
+    private async Task LoadOrderHeader()
+    {
+        try
+        {
+            IsLoading = true;
+            await CheckAuthorization();
+
+            // Load orders based on admin status
+            OrderHeaders = IsAdmin ? 
+                await _OrderRepo.GetOrdersAsync() : 
+                await _OrderRepo.GetOrdersAsync(userId);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task handleDelete(int id)
+    {
+        DeleteCategoryId = id;
+        await Js.InvokeVoidAsync("ShowConfirmationModal");
+    }
+
+    private async Task confirmDeleteClick(bool isConfirmed)
+    {
+        IsLoading = true;
+        await Js.InvokeVoidAsync("HideConfirmationModal");
+
+        if (isConfirmed && DeleteCategoryId != 0)
+        {
+            await CategoryRepo.DeleteCategoryAsync(DeleteCategoryId);
+            await Js.ToastrSuccess("Category Deleted Successfully");
+            await LoadOrderHeader(); // Ensure this is awaited and only called after the delete operation
+        }
+
+        DeleteCategoryId = 0;
+        IsLoading = false;
+    }
+
+    private async Task CheckAuthorization()
+    {
+        var authState = await AuthenticationState;
+        var user = authState?.User;
+
+        IsAdmin = user?.IsInRole(Sd.RoleAdmin) ?? false;
+        userId = user?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
+}
